@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 import posixpath
@@ -136,11 +137,17 @@ class SnifferPreference(MobileSnifferBase):
         }
 
     async def sniff(self) -> None:
+        # Under the asyncio ``async_command`` wrapper, Ctrl+C surfaces inside the coroutine as a
+        # ``CancelledError`` (the wrapper cancels the task) rather than a ``KeyboardInterrupt``, so the
+        # HAR must be flushed from a ``finally`` to actually be written on exit.
         try:
             await self._sniff()
-        except KeyboardInterrupt:
+        except (KeyboardInterrupt, asyncio.CancelledError):
+            pass
+        finally:
             if self.out:
                 self.out.write(json.dumps(self.har, indent=4))
+                self.out.flush()
 
     async def _sniff(self) -> None:
         incomplete = ""
